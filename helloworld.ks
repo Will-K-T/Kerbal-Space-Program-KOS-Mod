@@ -99,6 +99,13 @@ function maneuverBurnTime{
     local mf is ship:mass / constant():e^(dV/(isp*g0)).
     local fuelFlow is ship:maxthrust / (isp * g0).
     local t is (ship:mass - mf) / fuelFlow.
+    print "Delta V: " + dv.
+    print "Mass init: " + mass.
+    print "Mass final: " + mf.
+    print "Flow Rate: " + fuelFlow.
+    print "Thrust: " + maxthrust.
+    print "ISP: " + isp.
+    print "Time: " + t.
     return t.
 }
 
