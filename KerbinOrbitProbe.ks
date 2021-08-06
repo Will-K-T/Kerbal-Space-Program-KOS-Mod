@@ -2,7 +2,9 @@ function main{
     launch().
     ascent().
     coast().
-    circularize().
+    local mnv to circularize().
+    executeManeuver(mnv).
+    deployPayload().
     wait until false.
 }
 
@@ -37,21 +39,74 @@ function coast{
 }
 
 function circularize{
+    print "Creating circular maneuver.".
     local apOrbitalVel to sqrt((constant:G*body:mass) * ((2/(body:radius+apoapsis)) - (1/orbit:semimajoraxis))).
     local deltaVPrograge to sqrt((constant:G * body:mass)/(body:radius+apoapsis)) - apOrbitalVel.
     local mnv to node(time:seconds+orbit:eta:apoapsis, 0, 0, deltaVPrograge).
-    executeManeuver(mnv).
+    return mnv.
 }
 
+function deployPayload{
+    print "Deploying payload.".
+    lock steering to prograde.
+    wait until vang(prograde:forevector, ship:facing:vector) < 0.25.
+    stage.
+    wait 1.
+    stage.
+}
+
+//TODO optimize this code to create better orbits
 function executeManeuver{
+    print "Maneuver initiated.".
     parameter mnv.
     add mnv.
     local burnTime to maneuverBurnTime(mnv:deltaV:mag).
     lock steering to mnv:burnvector.
-    wait until time:seconds > (time:seconds+mnv:eta-burnTime/2).
-    lock throttle to 1.
-    wait burnTime.
-    lock throttle to 0.
+    set nd to nextnode.
+    local startTime to burnTime/2.
+    //TODO the start time is off by 1.35 sec
+    wait until mnv:eta <= startTime.
+
+    set tset to 0.
+    lock throttle to tset.
+
+    set done to False.
+    set dv0 to nd:deltav.
+    until done
+    {
+        //set max_acc to ship:maxthrust/ship:mass.
+        set max_acc to ship:availablethrust/ship:mass.
+
+        //set tset to min(nd:deltav:mag/max_acc, 1).
+        set tset to min(maneuverBurnTime(mnv:deltaV:mag), 1).
+
+        if vdot(dv0, nd:deltav) < 0
+        {
+            print "End burn, remain dv " + round(nd:deltav:mag,1) + "m/s, vdot: " + round(vdot(dv0, nd:deltav),1).
+            lock throttle to 0.
+            break.
+        }
+
+        if nd:deltav:mag < 0.1
+        {
+            print "Finalizing burn, remain dv " + round(nd:deltav:mag,1) + "m/s, vdot: " + round(vdot(dv0, nd:deltav),1).
+            wait until vdot(dv0, nd:deltav) < 0.5.
+
+            lock throttle to 0.
+            print "End burn, remain dv " + round(nd:deltav:mag,1) + "m/s, vdot: " + round(vdot(dv0, nd:deltav),1).
+            set done to True.
+        }
+    }
+    unlock steering.
+    unlock throttle.
+
+    wait 1.
+    remove nd.
+    // lock throttle to 1.
+    // wait burnTime.
+    // lock throttle to 0.
+    // unlock steering.
+    // unlock throttle.
 }
 
 function maneuverBurnTime{
